@@ -551,10 +551,17 @@ class MainWindow(QMainWindow):
 
                                             if not cooldown_active:
                                                 class_name = CLASS_NAMES[classe]
-                                                if direction == "direita":
-                                                    total_direita[class_name] += 1
+                                                idx = list(CLASS_NAMES.values()).index(class_name)
+                                                if direction == direcao_decrescente:
+                                                    # self.total_decrescente_dia[class_name]   += 1   # por dia
+                                                    self.total_decrescente_global[class_name] += 1  # global
+                                                    # tabela_dia.setItem(idx, 1, QTableWidgetItem(str(self.total_decrescente_dia[class_name])))
+                                                    self.tabela_global.setItem(idx, 1, QTableWidgetItem(str(self.total_decrescente_global[class_name])))
                                                 else:
-                                                    total_esquerda[class_name] += 1
+                                                    # self.total_crescente_dia[class_name]   += 1
+                                                    self.total_crescente_global[class_name] += 1
+                                                    # tabela_dia.setItem(idx, 2, QTableWidgetItem(str(self.total_crescente_dia[class_name])))
+                                                    self.tabela_global.setItem(idx, 2, QTableWidgetItem(str(self.total_crescente_global[class_name])))
 
                                                 counted_vehicles[id] = {"direction": direction, "frame": current_frame_number}
                                                 cooldown_active = True
@@ -573,8 +580,8 @@ class MainWindow(QMainWindow):
                             cv2.line(frame, (region_start, 0), (region_start, frame.shape[0]), (0, 0, 255), 2)
                             cv2.line(frame, (region_end, 0), (region_end, frame.shape[0]), (0, 0, 255), 2)
 
-                            total_right = sum(total_direita.values())
-                            total_left = sum(total_esquerda.values())
+                            total_right = sum(self.total_decrescente_global.values())
+                            total_left = sum(self.total_crescente_global.values())
                             cv2.rectangle(frame, (5, 5), (400, 40), (0, 0, 0), -1)
                             cv2.putText(frame, f"Decrescente: {total_right}", (10, 30),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
@@ -583,7 +590,7 @@ class MainWindow(QMainWindow):
                             cv2.putText(frame, f"Crescente: {total_left}", (10, 70),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
-                            self.atualizar_tabela_contagem(total_direita, total_esquerda)
+                            # self.atualizar_tabela_contagem(total_direita, total_esquerda)
 
                             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             h, w, ch = rgb_frame.shape
@@ -598,11 +605,11 @@ class MainWindow(QMainWindow):
         elif self.config_window.modo=="Definir quantidade de dias":
             from datetime import datetime, timedelta
 
-            def primeiro_domingo_do_mes(ano, mes):
-                data = datetime(ano, mes, 1)
-                while data.weekday() != 6:
-                    data += timedelta(days=1)
-                return data
+            # def primeiro_domingo_do_mes(ano, mes):
+            #     data = datetime(ano, mes, 1)
+            #     while data.weekday() != 6:
+            #         data += timedelta(days=1)
+            #     return data
 
             subpastas_validas = [d for d in os.listdir(root_directory) if os.path.isdir(os.path.join(root_directory, d)) and d.isdigit() and len(d) == 8]
             if not subpastas_validas:
@@ -766,8 +773,7 @@ class MainWindow(QMainWindow):
                         self.salvar_video_processado(self.historico_path, file)
                         self.salvar_tabela_txt()
 
-
-        if self.config_window.modo == "Contagem por Streaming":
+        else:
             cap = cv2.VideoCapture(self.config_window.link, cv2.CAP_FFMPEG)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
