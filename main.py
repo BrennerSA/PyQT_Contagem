@@ -162,7 +162,7 @@ class Interface(QWidget):
         self.fator_sazonalidade = self.sazonalidade.value()
         self.carga = self.spin_carga.value()
         self.sobrecarga = self.spin_sobrecarga.value()
-        self.start_callback(self.model_path, self.root_directory, self.line_x, self.dias_mes, self.sentido_crescente, self.fator_sazonalidade,self.input_taxa)
+        self.start_callback(self.model_path, self.root_directory, self.line_x, self.dias_mes, self.sentido_crescente, self.fator_sazonalidade,self.input_taxa,self.sobrecarga)
         self.close()
 
 
@@ -301,6 +301,11 @@ class MainWindow(QMainWindow):
         fator_direcional = 1       # metade do tráfego por faixa usada na fórmula
 
         # --- Fatores de equivalência por classe (FE) ---
+
+        # Parâmetro de sobrecarga
+        sobrecarga = 0  # 20%, por exemplo
+
+        # Limites por eixo
         LIMITE_EIXOS = {
             "SRS": 6,
             "SRD": 10,
@@ -308,30 +313,76 @@ class MainWindow(QMainWindow):
             "TT" : 25.5
         }
 
-        LIMITE_EIXOS_SOBRECARGA = {
-            eixo: valor * (1+fator_sobrecarga)
-            for eixo, valor in LIMITE_EIXOS.items()
+        # Limites com sobrecarga
+        LIMITE_EIXOS_SOBRECARGA = {eixo: valor * (1 + sobrecarga) for eixo, valor in LIMITE_EIXOS.items()}
+
+        # Tabela de veículos e seus eixos
+        tabela = """
+        2C    SRS SRD
+        4C    SRS SRD TD
+        2S3   SRS SRD TT
+        3J3   SRS SRD TD TD
+        3J4   SRS SRD TD TD
+        3S3   SRS TD TT
+        3C    SRS TD
+        2CB   SRS SRD
+        3CB   SRS TD
+        3D4   SRS TD TD TD
+        3I3   SRS SRD SRD SRD TD
+        """.strip().splitlines()
+
+        # Mapeamento do código do veículo para o nome completo
+        codigo_para_nome = {
+            "2C": "Caminhao (2C)",
+            "4C": "Caminhao Duplo Direcional Trucado (4C)",
+            "2S3": "Caminhao Trator + Semi Reboque (2S3)",
+            "3J3": "Caminhao Trator Trucado + Semi Reboque (3J3)",
+            "3J4": "Caminhao Trator Trucado + Semi Reboque (3J4)",
+            "3S3": "Caminhao Trator Trucado + Semi Reboque (3S3)",
+            "3C": "Caminhao Trucado (3C)",
+            "2CB": "Onibus (2CB)",
+            "3CB": "Onibus Trucado (3CB)",
+            "3D4": "Bitrem Articulado (3D4)",
+            "3I3": "Caminhao Trator Trucado + Semi Reboque (3I3)"
         }
 
-        LIMITE_EIXOS_SOBRECARGA_AASTHO = {
-            eixo: valor * (1+fator_sobrecarga)
-            for eixo, valor in LIMITE_EIXOS_SOBRECARGA.items()
+        # Divisores e expoentes calibrados por tipo de eixo
+        DIVISORES = {
+            "SRS": 7.77,
+            "SRD": 8.17,
+            "TD" : 15.08,
+            "TT" : 22.95
         }
-        
-        
-        FATORES_EQUIVALENCIA = {
-            "Caminhao (2C)": 2.7218,
-            "Caminhao Duplo Direcional Trucado (4C)": 2.2971,
-            "Caminhao Trator + Semi Reboque (2S3)": 4.2817,
-            "Caminhao Trator Trucado + Semi Reboque (3J3)": 6.0065,
-            "Caminhao Trator Trucado + Semi Reboque (3J4)": 6.5,
-            "Caminhao Trator Trucado + Semi Reboque (3S3)": 3.5296,
-            "Caminhao Trucado (3C)": 1.9697,
-            "Onibus (2CB)": 2.7218,
-            "Onibus Trucado (3CB)": 1.9697,
-            "Bitrem Articulado (3D4)": 5.2545,
-            "Caminhao Trator Trucado + Semi Reboque (3I3)": 9.153
+
+        EXPOENTES = {
+            "SRS": 4.32,
+            "SRD": 4.32,
+            "TD" : 4.14,
+            "TT" : 4.22
         }
+
+        # Função para calcular fator de equivalência do veículo
+        def fator_veiculo(eixos):
+            fator_total = 0
+            for e in eixos:
+                P = LIMITE_EIXOS_SOBRECARGA[e]
+                divisor = DIVISORES[e]
+                expoente = EXPOENTES[e]
+                fator_total += (P / divisor) ** expoente
+            return round(fator_total, 4)
+
+        # Criar FATORES_EQUIVALENCIA
+        FATORES_EQUIVALENCIA = {}
+        for linha in tabela:
+            partes = linha.split()
+            codigo = partes[0]
+            eixos = partes[1:]
+            nome = codigo_para_nome[codigo]
+            FATORES_EQUIVALENCIA[nome] = fator_veiculo(eixos)
+
+        # Exibir resultado
+        for k, v in FATORES_EQUIVALENCIA.items():
+            print(f'"{k}": {v},')
 
         # Seleciona destino
         caminho, _ = QFileDialog.getSaveFileName(self, "Salvar PDF", "numero_N_10anos.pdf", "PDF Files (*.pdf)")
@@ -445,11 +496,12 @@ class MainWindow(QMainWindow):
             f.write(f"{nome_video}\n")
 
 
-    def iniciar_processamento(self, model_path, root_directory, line_x, dias_mes,sentido_crescente,fator_sazonalidade,taxa):
+    def iniciar_processamento(self, model_path, root_directory, line_x, dias_mes,sentido_crescente,fator_sazonalidade,taxa,sobrecarga):
         self.config_window.close()
         self.show()
         model = YOLO(model_path)
         self.fator_sazonalide=fator_sazonalidade
+        self.sobrecarga=sobrecarga
         self.taxa=taxa
         region_width = 40
         region_start = line_x - region_width // 2
