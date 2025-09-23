@@ -73,6 +73,11 @@ class Interface(QWidget):
         self.sentido_combo.addItems(["Esquerda", "Direita"])
         layout_config.addRow(QLabel("Sentido da Contagem:"), self.sentido_combo)
 
+        # 🔹 Novo: Método de cálculo do fator de veículo
+        self.metodo_combo = QComboBox()
+        self.metodo_combo.addItems(["AASTHO", "USACE"])
+        layout_config.addRow(QLabel("Método de Cálculo:"), self.metodo_combo)
+
         # Sazonalidade
         self.sazonalidade = QDoubleSpinBox()
         self.sazonalidade.setRange(0.0, 5.0)
@@ -162,7 +167,18 @@ class Interface(QWidget):
         self.fator_sazonalidade = self.sazonalidade.value()
         self.carga = self.spin_carga.value()
         self.sobrecarga = self.spin_sobrecarga.value()
-        self.start_callback(self.model_path, self.root_directory, self.line_x, self.dias_mes, self.sentido_crescente, self.fator_sazonalidade,self.input_taxa,self.sobrecarga)
+        self.metodo_calculo = self.metodo_combo.currentText()  # 🔹 Captura método escolhido
+        self.start_callback(
+            self.model_path,
+            self.root_directory,
+            self.line_x,
+            self.dias_mes,
+            self.sentido_crescente,
+            self.fator_sazonalidade,
+            self.input_taxa,
+            self.sobrecarga,
+            self.metodo_calculo   # 🔹 Passa para o processamento
+        )
         self.close()
 
 
@@ -346,15 +362,30 @@ class MainWindow(QMainWindow):
             "3I3": "Caminhao Trator Trucado + Semi Reboque (3I3)"
         }
 
+        # Coeficientes e expoentes por tipo de eixo
+        COEFICIENTES_USACE = {
+            "SRS": 2.0782e-4,
+            "SRD": 1.832e-6,
+            "TD" : 1.5280e-6,
+            "TT" : 1.3229e-7
+        }
+
+        EXPOENTES_USACE = {
+            "SRS": 4.0175,
+            "SRD": 6.2542,
+            "TD" : 5.4840,
+            "TT" : 5.5789
+        }
+        
         # Divisores e expoentes calibrados por tipo de eixo
-        DIVISORES = {
+        DIVISORES_AASTHO = {
             "SRS": 7.77,
             "SRD": 8.17,
             "TD" : 15.08,
             "TT" : 22.95
         }
 
-        EXPOENTES = {
+        EXPOENTES_AASTHO = {
             "SRS": 4.32,
             "SRD": 4.32,
             "TD" : 4.14,
@@ -362,13 +393,22 @@ class MainWindow(QMainWindow):
         }
 
         # Função para calcular fator de equivalência do veículo
-        def fator_veiculo(eixos):
+        def fator_veiculo_AASTHO(eixos):
             fator_total = 0
             for e in eixos:
                 P = LIMITE_EIXOS_SOBRECARGA[e]
-                divisor = DIVISORES[e]
-                expoente = EXPOENTES[e]
+                divisor = DIVISORES_AASTHO[e]
+                expoente = EXPOENTES_AASTHO[e]
                 fator_total += (P / divisor) ** expoente
+            return round(fator_total, 4)
+        
+        def fator_veiculo_USACE(eixos):
+            fator_total = 0
+            for e in eixos:
+                P = LIMITE_EIXOS_SOBRECARGA[e]
+                coef = COEFICIENTES_USACE[e]
+                expoente = EXPOENTES_USACE[e]
+                fator_total += coef * (P ** expoente)
             return round(fator_total, 4)
 
         # Criar FATORES_EQUIVALENCIA
@@ -378,7 +418,12 @@ class MainWindow(QMainWindow):
             codigo = partes[0]
             eixos = partes[1:]
             nome = codigo_para_nome[codigo]
-            FATORES_EQUIVALENCIA[nome] = fator_veiculo(eixos)
+            if self.metodo == "AASTHO":
+                FATORES_EQUIVALENCIA[nome] = fator_veiculo_AASTHO(eixos)
+            elif self.metodo == "USACE":
+                FATORES_EQUIVALENCIA[nome] = fator_veiculo_USACE(eixos)
+            else:
+                raise ValueError("Método inválido. Use 'AASTHO' ou 'USACE'.")
 
         # Exibir resultado
         for k, v in FATORES_EQUIVALENCIA.items():
@@ -496,13 +541,14 @@ class MainWindow(QMainWindow):
             f.write(f"{nome_video}\n")
 
 
-    def iniciar_processamento(self, model_path, root_directory, line_x, dias_mes,sentido_crescente,fator_sazonalidade,taxa,sobrecarga):
+    def iniciar_processamento(self, model_path, root_directory, line_x, dias_mes,sentido_crescente,fator_sazonalidade,taxa,sobrecarga,metodo):
         self.config_window.close()
         self.show()
         model = YOLO(model_path)
         self.fator_sazonalide=fator_sazonalidade
         self.sobrecarga=sobrecarga
         self.taxa=taxa
+        self.metodo=metodo
         region_width = 40
         region_start = line_x - region_width // 2
         region_end = line_x + region_width // 2
