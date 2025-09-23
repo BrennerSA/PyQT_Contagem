@@ -564,6 +564,12 @@ class MainWindow(QMainWindow):
                         DELAY_FRAMES = 50
 
                         while cap.isOpened():
+                            if self.video_stopped:
+                                cap.release()
+                                return
+                            if self.video_paused:
+                                QApplication.processEvents()
+                                continue
                             ret, frame = cap.read()
                             if not ret:
                                 break
@@ -643,8 +649,9 @@ class MainWindow(QMainWindow):
                                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
                             # self.atualizar_tabela_contagem(total_direita, total_esquerda)
+                            exibicao_frame = cv2.resize(frame, (640, 360))
 
-                            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            rgb_frame = cv2.cvtColor(exibicao_frame, cv2.COLOR_BGR2RGB)
                             h, w, ch = rgb_frame.shape
                             bytes_per_line = ch * w
                             qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
@@ -653,6 +660,7 @@ class MainWindow(QMainWindow):
 
                         cap.release()
                         self.salvar_video_processado(self.historico_path, file)
+                        self.salvar_tabela_txt()
 
         elif self.config_window.modo=="Definir quantidade de dias":
             from datetime import datetime, timedelta
